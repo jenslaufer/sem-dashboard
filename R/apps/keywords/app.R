@@ -2,7 +2,7 @@ library(tidyverse)
 library(zoo)
 library(ggrepel)
 library(shiny)
-library(semtools)
+library(semtools, verbose = T)
 library(DT)
 library(logging)
 library(glue)
@@ -76,7 +76,7 @@ ui <- fluidPage(
             
             selectInput(
                 "xScale",
-                "Scaling Y",
+                "Scaling X",
                 list("Logarithmic" = "log10", "Linear" = "identity"),
                 selected = "Logarithmic"
             ),
@@ -97,7 +97,10 @@ ui <- fluidPage(
             
         ),
         
-        mainPanel(plotOutput("keywordPlot") %>% withSpinner(type = 6))
+        mainPanel(
+            plotOutput("distributionPlot"),
+            plotOutput("keywordPlot") %>% withSpinner(type = 6)
+        )
     )
 )
 
@@ -130,7 +133,7 @@ server <- function(input, output, session) {
                 ) %>%
                 filter(bid >= input$bid[1] &
                            bid <= input$bid[2])
-            
+                
         },
         error = function(e) {
             logerror(e)
@@ -147,7 +150,10 @@ server <- function(input, output, session) {
             .labels = input$plotLabels
         )
     })
+    
+    output$distributionPlot <- renderPlot({
+        semtools::distribution.quantitative.plot(data())
+    })
 }
-
 basicConfig(level = 10)
 shinyApp(ui = ui, server = server)
