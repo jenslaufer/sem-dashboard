@@ -99,7 +99,8 @@ ui <- fluidPage(
         
         mainPanel(
             plotOutput("distributionPlot"),
-            plotOutput("keywordPlot") %>% withSpinner(type = 6)
+            plotOutput("keywordPlot") %>% withSpinner(type = 6),
+            dataTableOutput("data")
         )
     )
 )
@@ -133,7 +134,7 @@ server <- function(input, output, session) {
                 ) %>%
                 filter(bid >= input$bid[1] &
                            bid <= input$bid[2])
-                
+            
         },
         error = function(e) {
             logerror(e)
@@ -154,6 +155,12 @@ server <- function(input, output, session) {
     output$distributionPlot <- renderPlot({
         semtools::distribution.quantitative.plot(data())
     })
+    
+    output$data <-
+        renderDataTable(bind_cols(
+            data() %>% select_at(., "keyword"),
+            data() %>% select_if(is.numeric)
+        ))
 }
 basicConfig(level = 10)
 shinyApp(ui = ui, server = server)
