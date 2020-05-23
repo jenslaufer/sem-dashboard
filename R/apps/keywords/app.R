@@ -11,6 +11,20 @@ library(shinythemes)
 library(shinycssloaders)
 
 
+JScode <-
+    "$(function() {
+    setTimeout(function(){
+      var vals = [0];
+      var powStart = 5;
+      var powStop = 2;
+      for (i = powStart; i >= powStop; i--) {
+        var val = Math.pow(10, -i);
+        val = parseFloat(val.toFixed(8));
+        vals.push(val);
+      }
+      $('#pvalue').data('ionRangeSlider').update({'values':vals})
+    }, 5)})"
+
 .slider.input <- function(name,
                           title,
                           .min = 0,
@@ -59,8 +73,9 @@ library(shinycssloaders)
 
 
 ui <- fluidPage(
-    theme = shinytheme("cosmo"),
-    chooseSliderSkin("Modern", "DimGray"),
+    
+    #theme = shinytheme("cosmo"),
+    #chooseSliderSkin("Modern", "DimGray"),
     titlePanel("Keyword Analysis"),
     
     sidebarLayout(
@@ -111,6 +126,7 @@ server <- function(input, output, session) {
         data <-
             (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.keywords()
+        print(data %>%  arrange(avg.monthly.searches) %>% head(20))
         
         
         .update.slider(data, session, "bid")
