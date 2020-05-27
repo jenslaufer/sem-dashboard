@@ -11,51 +11,21 @@ library(shinythemes)
 library(shinycssloaders)
 
 
-.slider.input <- function(name,
-                          title,
-                          .min = 0,
-                          .max = 1,
-                          .value = c(.min, .max)) {
-    sliderInput(name,
-                title,
-                min = .min,
-                max = .max,
-                value = .value)
-}
 
-
-
-.update.slider <- function(data, session, field, name = field) {
+.slider.input <- function(data,
+                          field,
+                          title = field) {
     max <- data %>% pull(field) %>% max(na.rm = TRUE)
     min <-
         data %>% pull(field) %>% min(na.rm = TRUE)
-    
-    logdebug(".update.slider: min: {min}, max: {max}" %>% glue())
-    
-    updateSliderInput(
-        session,
-        name,
-        max = max,
+    sliderInput(
+        field,
+        title,
         min = min,
+        max = max,
         value = c(min, max)
     )
 }
-
-.update.numeric.range.input <-
-    function(data, session, field, name = field) {
-        logdebug(".update.numeric.range.input...")
-        max <- data %>% pull(field) %>% max(na.rm = TRUE)
-        min <-
-            data %>% pull(field) %>% min(na.rm = TRUE)
-        
-        logdebug(".update.numeric.range.input: min: {min}, max: {max}" %>% glue())
-        
-        updateNumericRangeInput(session,
-                                name,
-                                label = "",
-                                value = c(min, max))
-    }
-
 
 
 ui <- fluidPage(
@@ -73,7 +43,6 @@ ui <- fluidPage(
                            "text/comma-separated-values,text/plain",
                            ".csv")
             ),
-            
             selectInput(
                 "xScale",
                 "Scaling X",
@@ -86,54 +55,55 @@ ui <- fluidPage(
                 list("Logarithmic" = "log10", "Linear" = "identity"),
                 selected = "Logarithmic"
             ),
-            .slider.input("competition", "Competition", 0, 100),
-            .slider.input("bid", "Bid"),
-            .slider.input("avg.monthly.searches", "Average Monthy Searches"),
             radioButtons("plotLabels",
                          "Plot Labels",
                          c("Yes" = T,
                            "No" = F), selected = F),
-            .slider.input("alpha", "Alpha", .value = 1)
+            sliderInput(
+                "alpha",
+                "Alpha",
+                min = 0,
+                max = 1,
+                value = 1
+            ),
+            uiOutput("sliders")
             
         ),
         
         mainPanel(
             plotOutput("distributionPlot"),
-            plotOutput("keywordPlot") %>% withSpinner(type = 6)
+            plotOutput("keywordPlot") %>% withSpinner(type = 6),
+            dataTableOutput("data")
         )
     )
 )
 
 server <- function(input, output, session) {
-    initial <- reactive({
+    keyword.files <- reactive({
         req(input$keywordFiles)
-        data <-
-            (input$keywordFiles %>% pull(datapath)) %>%
-            semtools::load.keywords()
-        
-        
-        .update.slider(data, session, "bid")
-        .update.slider(data, session, "avg.monthly.searches")
-        
         input$keywordFiles
     })
     
-    data <- reactive({
+    initial.data <- reactive({
+        (keyword.files() %>% pull(datapath)) %>%
+            semtools::load.keywords()
+    })
+    
+    filtered.data <- reactive({
         tryCatch({
             data <-
-                (initial() %>% pull(datapath)) %>%
+                (keyword.files() %>% pull(datapath)) %>%
                 semtools::load.keywords()
             
-            data %>%
-                filter(competition >= input$competition[1] &
-                           competition <= input$competition[2]) %>%
-                filter(
-                    avg.monthly.searches >= input$avg.monthly.searches[1] &
-                        avg.monthly.searches <= input$avg.monthly.searches[2]
-                ) %>%
-                filter(bid >= input$bid[1] &
-                           bid <= input$bid[2])
-                
+            query <- data %>% select_if(is.numeric) %>%
+                colnames() %>%
+                map(
+                    function(feature)
+                        "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
+                ) %>% paste0(collapse = ",")
+            
+            eval(parse(text = "data %>% filter({query})" %>% glue()))
+            
         },
         error = function(e) {
             logerror(e)
@@ -141,9 +111,16 @@ server <- function(input, output, session) {
         })
     })
     
+    output$sliders <- renderUI({
+        data <- initial.data()
+        data %>%
+            select_if(is.numeric) %>%
+            colnames() %>%
+            map( ~ .slider.input(data = data, field = .))
+    })
+    
     output$keywordPlot <- renderPlot({
-        semtools::keyword.plot(
-            data(),
+        filtered.data() %>% semtools::keyword.plot(
             .alpha = input$alpha,
             .x.trans = input$xScale,
             .y.trans = input$yScale,
@@ -152,8 +129,14 @@ server <- function(input, output, session) {
     })
     
     output$distributionPlot <- renderPlot({
-        semtools::distribution.quantitative.plot(data())
+        filtered.data() %>% semtools::distribution.quantitative.plot()
     })
+    
+    output$data <-
+        renderDataTable(bind_cols(
+            filtered.data() %>% select_at(., "keyword"),
+            filtered.data() %>% select_if(is.numeric)
+        ))
 }
 basicConfig(level = 10)
 shinyApp(ui = ui, server = server)
