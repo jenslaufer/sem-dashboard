@@ -43,7 +43,6 @@ ui <- fluidPage(
                            "text/comma-separated-values,text/plain",
                            ".csv")
             ),
-            uiOutput("sliders"),
             selectInput(
                 "xScale",
                 "Scaling X",
@@ -66,7 +65,8 @@ ui <- fluidPage(
                 min = 0,
                 max = 1,
                 value = 1
-            )
+            ),
+            uiOutput("sliders")
             
         ),
         
@@ -95,15 +95,14 @@ server <- function(input, output, session) {
                 (keyword.files() %>% pull(datapath)) %>%
                 semtools::load.keywords()
             
-            data %>%
-                filter(competition >= input$competition[1] &
-                           competition <= input$competition[2]) %>%
-                filter(
-                    avg.monthly.searches >= input$avg.monthly.searches[1] &
-                        avg.monthly.searches <= input$avg.monthly.searches[2]
-                ) %>%
-                filter(bid >= input$bid[1] &
-                           bid <= input$bid[2])
+            query <- data %>% select_if(is.numeric) %>%
+                colnames() %>%
+                map(
+                    function(feature)
+                        "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
+                ) %>% paste0(collapse = ",")
+            
+            eval(parse(text = "data %>% filter({query})" %>% glue()))
             
         },
         error = function(e) {
@@ -117,7 +116,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map( ~ .slider.input(data = data, field = .))
     })
     
     output$keywordPlot <- renderPlot({
