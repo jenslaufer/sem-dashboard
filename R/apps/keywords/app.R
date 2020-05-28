@@ -116,20 +116,35 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map( ~ .slider.input(data = data, field = .))
+            map(~ .slider.input(data = data, field = .))
     })
     
     output$keywordPlot <- renderPlot({
-        filtered.data() %>% semtools::keyword.plot(
-            .alpha = input$alpha,
-            .x.trans = input$xScale,
-            .y.trans = input$yScale,
-            .labels = input$plotLabels
-        )
+        filtered.data() %>%
+            mutate(bid.chance = 1 / bid) %>%
+            semtools::keyword.plot(
+                .alpha = input$alpha,
+                .x.trans = input$xScale,
+                .y.trans = input$yScale,
+                .labels = input$plotLabels
+            )
+    })
+    
+    
+    output$pcaPlot <- renderPlot({
+        filtered.data() %>%
+            mutate(bid.chance = 1 / bid) %>%
+            semtools::keyword.plot(
+                .alpha = input$alpha,
+                .x.trans = input$xScale,
+                .y.trans = input$yScale,
+                .labels = input$plotLabels
+            )
     })
     
     output$distributionPlot <- renderPlot({
-        filtered.data() %>% semtools::distribution.quantitative.plot()
+        filtered.data() %>%
+            semtools::distribution.quantitative.plot()
     })
     
     output$data <-
