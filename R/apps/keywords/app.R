@@ -9,15 +9,21 @@ library(glue)
 library(shinyWidgets)
 library(shinythemes)
 library(shinycssloaders)
+library(ggfortify)
+library(broom)
 
 
 
 .slider.input <- function(data,
                           field,
                           title = field) {
-    max <- data %>% pull(field) %>% max(na.rm = TRUE)
+    max <- data %>%
+        pull(field) %>%
+        max(na.rm = TRUE)
     min <-
-        data %>% pull(field) %>% min(na.rm = TRUE)
+        data %>%
+        pull(field) %>%
+        min(na.rm = TRUE)
     sliderInput(
         field,
         title,
@@ -58,7 +64,8 @@ ui <- fluidPage(
             radioButtons("plotLabels",
                          "Plot Labels",
                          c("Yes" = T,
-                           "No" = F), selected = F),
+                           "No" = F),
+                         selected = F),
             sliderInput(
                 "alpha",
                 "Alpha",
@@ -67,12 +74,12 @@ ui <- fluidPage(
                 value = 1
             ),
             uiOutput("sliders")
-            
         ),
         
         mainPanel(
             plotOutput("distributionPlot"),
             plotOutput("keywordPlot") %>% withSpinner(type = 6),
+            textOutput(outputId = "myText"),
             dataTableOutput("data")
         )
     )
@@ -89,21 +96,21 @@ server <- function(input, output, session) {
             semtools::load.keywords()
     })
     
-    filtered.data <- reactive({
+    filtered_data <- reactive({
         tryCatch({
             data <-
                 (keyword.files() %>% pull(datapath)) %>%
                 semtools::load.keywords()
             
-            query <- data %>% select_if(is.numeric) %>%
+            query <- data %>%
+                select_if(is.numeric) %>%
                 colnames() %>%
-                map(
-                    function(feature)
-                        "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
-                ) %>% paste0(collapse = ",")
+                map(function(feature) {
+                    "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
+                }) %>%
+                paste0(collapse = ",")
             
             eval(parse(text = "data %>% filter({query})" %>% glue()))
-            
         },
         error = function(e) {
             logerror(e)
@@ -119,8 +126,9 @@ server <- function(input, output, session) {
             map(~ .slider.input(data = data, field = .))
     })
     
+    
     output$keywordPlot <- renderPlot({
-        filtered.data() %>%
+        filtered_data() %>%
             mutate(bid.chance = 1 / bid) %>%
             semtools::keyword.plot(
                 .alpha = input$alpha,
@@ -131,27 +139,20 @@ server <- function(input, output, session) {
     })
     
     
-    output$pcaPlot <- renderPlot({
-        filtered.data() %>%
-            mutate(bid.chance = 1 / bid) %>%
-            semtools::keyword.plot(
-                .alpha = input$alpha,
-                .x.trans = input$xScale,
-                .y.trans = input$yScale,
-                .labels = input$plotLabels
-            )
-    })
     
     output$distributionPlot <- renderPlot({
-        filtered.data() %>%
+        filtered_data() %>%
             semtools::distribution.quantitative.plot()
     })
     
+    
     output$data <-
-        renderDataTable(bind_cols(
-            filtered.data() %>% select_at(., "keyword"),
-            filtered.data() %>% select_if(is.numeric)
-        ))
+        renderDataTable({
+            bind_cols(
+                filtered_data() %>% select_at(., "keyword"),
+                filtered_data() %>% select_if(is.numeric)
+            )
+        }, escape = FALSE)
 }
 basicConfig(level = 10)
 shinyApp(ui = ui, server = server)
