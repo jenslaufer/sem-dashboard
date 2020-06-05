@@ -93,13 +93,14 @@ server <- function(input, output, session) {
             mutate(id = row_number(), included = F) %>%
             mutate(id = as.character(id)) %>%
             as_tibble() %>%
-            mutate(Actions = map(
+            mutate(Actions = map2(
                 id,
+                included,
                 ~ shinyInput(
                     actionButton,
                     'button_',
                     .x,
-                    label = "Include",
+                    label = if_else(.y, "Exclude", "Include"),
                     onclick = paste0('Shiny.onInputChange( \"select_button\" , this.id)')
                 )
             ))
@@ -140,6 +141,17 @@ server <- function(input, output, session) {
                 id == data$keywords %>%
                     filter(id == selectedId) %>% pull(id)  ~ T,
                 T ~ F
+            )) %>%
+            mutate(Actions = map2(
+                id,
+                included,
+                ~ shinyInput(
+                    actionButton,
+                    'button_',
+                    .x,
+                    label = if_else(.y, "Exclude", "Include"),
+                    onclick = paste0('Shiny.setInputValue( \"select_button\" , this.id)')
+                )
             ))
     })
     
