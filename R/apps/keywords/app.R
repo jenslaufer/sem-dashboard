@@ -2,7 +2,7 @@ library(tidyverse)
 library(zoo)
 library(ggrepel)
 library(shiny)
-library(semtools, verbose = T)
+library(semtools)
 library(DT)
 library(logging)
 library(glue)
@@ -75,7 +75,6 @@ ui <- fluidPage(
             ),
             uiOutput("sliders")
         ),
-        
         mainPanel(
             plotOutput("distributionPlot"),
             plotOutput("keywordPlot") %>% withSpinner(type = 6),
@@ -86,22 +85,36 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-    keyword.files <- reactive({
-        req(input$keywordFiles)
-        input$keywordFiles
+    data <- reactiveValues(keywords = tibble())
+    
+    initial_data <- eventReactive(input$keywordFiles, {
+        data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
+            semtools::load.keywords() %>%
+            mutate(id = row_number(), included = F) %>%
+            mutate(id = as.character(id)) %>%
+            as_tibble() %>%
+            mutate(Actions = map(
+                id,
+                ~ shinyInput(
+                    actionButton,
+                    'button_',
+                    .x,
+                    label = "Include",
+                    onclick = paste0('Shiny.onInputChange( \"select_button\" , this.id)')
+                )
+            ))
+        data$keywords
     })
     
-    initial.data <- reactive({
-        (keyword.files() %>% pull(datapath)) %>%
-            semtools::load.keywords()
-    })
+    
+    shinyInput <- function(FUN, name, id, ...) {
+        as.character(FUN(paste0(name, id), ...))
+    }
     
     filtered_data <- reactive({
         tryCatch({
-            data <-
-                (keyword.files() %>% pull(datapath)) %>%
-                semtools::load.keywords()
-            
+            initial_data()
+            data <- data$keywords
             query <- data %>%
                 select_if(is.numeric) %>%
                 colnames() %>%
@@ -118,12 +131,24 @@ server <- function(input, output, session) {
         })
     })
     
+    observeEvent(input$select_button, {
+        selectedId <-
+            as.numeric(strsplit(input$select_button, "_")[[1]][2])
+        data$keywords <-
+            data$keywords %>% mutate(included = case_when(
+                included == T ~ T,
+                id == data$keywords %>%
+                    filter(id == selectedId) %>% pull(id)  ~ T,
+                T ~ F
+            ))
+    })
+    
     output$sliders <- renderUI({
-        data <- initial.data()
+        data <- initial_data()
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map( ~ .slider.input(data = data, field = .))
     })
     
     
@@ -148,10 +173,7 @@ server <- function(input, output, session) {
     
     output$data <-
         renderDataTable({
-            bind_cols(
-                filtered_data() %>% select_at(., "keyword"),
-                filtered_data() %>% select_if(is.numeric)
-            )
+            bind_cols(filtered_data())
         }, escape = FALSE)
 }
 basicConfig(level = 10)
