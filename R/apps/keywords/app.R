@@ -98,7 +98,7 @@ server <- function(input, output, session) {
                 included,
                 ~ shinyInput(
                     actionButton,
-                    'button_',
+                    if_else(.y, "Exclude_", "Include_"),
                     .x,
                     label = if_else(.y, "Exclude", "Include"),
                     onclick = paste0('Shiny.onInputChange( \"select_button\" , this.id)')
@@ -133,21 +133,30 @@ server <- function(input, output, session) {
     })
     
     observeEvent(input$select_button, {
-        selectedId <-
-            as.numeric(strsplit(input$select_button, "_")[[1]][2])
+        event <- input$select_button %>% str_split("_")
+        print(event)
+        
+        command <- event %>% map(1)
+        selectedId <- event %>% map(2) %>% as.numeric()
+        
         data$keywords <-
-            data$keywords %>% mutate(included = case_when(
-                included == T ~ T,
-                id == data$keywords %>%
-                    filter(id == selectedId) %>% pull(id)  ~ T,
-                T ~ F
-            )) %>%
+            data$keywords %>% mutate(
+                included = case_when(
+                    id == data$keywords %>%
+                        filter(id == selectedId) %>% pull(id) &
+                        command == "Include" ~ T,
+                    id == data$keywords %>%
+                        filter(id == selectedId) %>% pull(id) &
+                        command == "Exclude" ~ F,
+                    T ~ included
+                )
+            ) %>%
             mutate(Actions = map2(
                 id,
                 included,
                 ~ shinyInput(
                     actionButton,
-                    'button_',
+                    if_else(.y, "Exclude_", "Include_"),
                     .x,
                     label = if_else(.y, "Exclude", "Include"),
                     onclick = paste0('Shiny.setInputValue( \"select_button\" , this.id)')
