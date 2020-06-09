@@ -127,7 +127,6 @@ server <- function(input, output, session) {
     
     observeEvent(input$select_button, {
         event <- input$select_button %>% str_split("_")
-        print(event)
         
         command <- event %>% map(1)
         selectedId <- event %>% map(2) %>% as.numeric()
@@ -151,7 +150,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map( ~ .slider.input(data = data, field = .))
     })
     
     
