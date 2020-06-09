@@ -188,7 +188,7 @@ server <- function(input, output, session) {
     
     output$distributionPlot <- renderPlot({
         filtered_data() %>%
-            semtools::distribution.quantitative.plot()
+            semtools::distribution.quantitative.plots()
     })
     
     
