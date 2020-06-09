@@ -169,7 +169,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map( ~ .slider.input(data = data, field = .))
+            map(~ .slider.input(data = data, field = .))
     })
     
     
@@ -181,7 +181,8 @@ server <- function(input, output, session) {
                 .x.trans = input$xScale,
                 .y.trans = input$yScale,
                 .labels = input$plotLabels
-            )
+            ) +
+            scale_colour_gradientn(colours = terrain.colors(10))
     })
     
     
