@@ -75,12 +75,16 @@ ui <- fluidPage(
             ),
             uiOutput("sliders")
         ),
-        mainPanel(
-            plotOutput("distributionPlot"),
-            plotOutput("keywordPlot") %>% withSpinner(type = 6),
-            textOutput(outputId = "myText"),
-            dataTableOutput("data")
-        )
+        mainPanel(tabsetPanel(
+            tabPanel(
+                "Analysis",
+                plotOutput("distributionPlot"),
+                plotOutput("keywordPlot") %>% withSpinner(type = 6),
+                textOutput(outputId = "myText"),
+                dataTableOutput("data")
+            ),
+            tabPanel("Tagging", dataTableOutput("taggingData"))
+        ))
     )
 )
 
@@ -92,18 +96,7 @@ server <- function(input, output, session) {
             semtools::load.keywords() %>%
             mutate(id = row_number(), included = F) %>%
             mutate(id = as.character(id)) %>%
-            as_tibble() %>%
-            mutate(Actions = map2(
-                id,
-                included,
-                ~ shinyInput(
-                    actionButton,
-                    if_else(.y, "Exclude_", "Include_"),
-                    .x,
-                    label = if_else(.y, "Exclude", "Include"),
-                    onclick = paste0('Shiny.onInputChange( \"select_button\" , this.id)')
-                )
-            ))
+            as_tibble()
         data$keywords
     })
     
@@ -150,18 +143,7 @@ server <- function(input, output, session) {
                         command == "Exclude" ~ F,
                     T ~ included
                 )
-            ) %>%
-            mutate(Actions = map2(
-                id,
-                included,
-                ~ shinyInput(
-                    actionButton,
-                    if_else(.y, "Exclude_", "Include_"),
-                    .x,
-                    label = if_else(.y, "Exclude", "Include"),
-                    onclick = paste0('Shiny.setInputValue( \"select_button\" , this.id)')
-                )
-            ))
+            )
     })
     
     output$sliders <- renderUI({
@@ -196,6 +178,22 @@ server <- function(input, output, session) {
     output$data <-
         renderDataTable({
             bind_cols(filtered_data())
+        })
+    
+    output$taggingData <-
+        renderDataTable({
+            bind_cols(filtered_data() %>%
+                          mutate(Actions = map2(
+                              id,
+                              included,
+                              ~ shinyInput(
+                                  actionButton,
+                                  if_else(.y, "Exclude_", "Include_"),
+                                  .x,
+                                  label = if_else(.y, "Exclude", "Include"),
+                                  onclick = paste0('Shiny.setInputValue( \"select_button\" , this.id)')
+                              )
+                          )))
         }, escape = FALSE)
 }
 basicConfig(level = 10)
