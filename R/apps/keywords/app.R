@@ -95,7 +95,10 @@ server <- function(input, output, session) {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.keywords() %>%
             mutate(id = row_number()) %>%
-            mutate(included = ifelse("included" %in% row.names(.), included, F)) %>%
+            mutate(included = if ("included" %in% colnames(.))
+                included
+                else
+                    F) %>%
             as_tibble()
         
         
