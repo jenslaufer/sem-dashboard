@@ -94,9 +94,11 @@ server <- function(input, output, session) {
     initial_data <- eventReactive(input$keywordFiles, {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.keywords() %>%
-            mutate(id = row_number(), included = F) %>%
-            mutate(id = as.character(id)) %>%
+            mutate(id = row_number()) %>%
+            mutate(included = ifelse("included" %in% row.names(.), included, F)) %>%
             as_tibble()
+        
+        
         data$keywords
     })
     
@@ -145,12 +147,26 @@ server <- function(input, output, session) {
             )
     })
     
+    output$exportData <- downloadHandler(
+        filename = function() {
+            paste("labeled-", Sys.Date(), ".csv", sep = "")
+        },
+        content = function(file) {
+            data$keywords %>% write_csv(file)
+        }
+    )
+    
     output$sliders <- renderUI({
         data <- initial_data()
-        data %>%
-            select_if(is.numeric) %>%
-            colnames() %>%
-            map( ~ .slider.input(data = data, field = .))
+        list(
+            downloadButton("exportData", "Export..."),
+            data %>%
+                select_if(is.numeric) %>%
+                colnames() %>%
+                map(~ .slider.input(
+                    data = data, field = .
+                ))
+        )
     })
     
     
@@ -165,7 +181,6 @@ server <- function(input, output, session) {
             ) +
             scale_colour_gradientn(colours = terrain.colors(10))
     })
-    
     
     
     output$distributionPlot <- renderPlot({
