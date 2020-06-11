@@ -95,14 +95,17 @@ server <- function(input, output, session) {
     initial_data <- eventReactive(input$keywordFiles, {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.keywords() %>%
-            mutate(id = row_number()) %>%
+            mutate(id = row_number())  %>%
+            as_tibble() %>%
+            mutate(bid.chance = 1 / bid)
+        
+        print(data$keywords)
+        
+        data$keywords <- data$keywords %>%
             mutate(included = if ("included" %in% colnames(.))
                 included
                 else
-                    F) %>%
-            as_tibble() 
-        
-        
+                    F)
         data$keywords
     })
     
@@ -189,6 +192,14 @@ server <- function(input, output, session) {
                     selected = "bid"
                 )
             ),
+            cols %>% map(
+                ~ selectInput(
+                    "sizeFeature",
+                    "Feature size Encoding",
+                    list(cols),
+                    selected = "bid.chance"
+                )
+            ),
             downloadButton("exportData", "Export...")
         )
     })
@@ -198,18 +209,17 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map( ~ .slider.input(data = data, field = .))
+            map(~ .slider.input(data = data, field = .))
     })
     
     
     output$keywordPlot <- renderPlot({
         filtered_data() %>%
-            mutate(bid.chance = 1 / bid) %>% 
             semtools::keyword.plot(
                 x.feature.name = input$xFeature,
                 y.feature.name = input$yFeature,
                 color.feature.name = input$colorFeature,
-                #size.feature.name = input$sizeFeature,
+                size.feature.name = input$sizeFeature,
                 .alpha = input$alpha,
                 .x.trans = input$xScale,
                 .y.trans = input$yScale,
@@ -246,5 +256,5 @@ server <- function(input, output, session) {
                           )))
         }, escape = FALSE)
 }
-basicConfig(level = 10)
+basicConfig(level = 20)
 shinyApp(ui = ui, server = server)
