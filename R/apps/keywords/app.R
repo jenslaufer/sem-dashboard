@@ -73,6 +73,7 @@ ui <- fluidPage(
                 max = 1,
                 value = 1
             ),
+            uiOutput("axisControl"),
             uiOutput("sliders")
         ),
         mainPanel(tabsetPanel(
@@ -99,7 +100,7 @@ server <- function(input, output, session) {
                 included
                 else
                     F) %>%
-            as_tibble()
+            as_tibble() 
         
         
         data$keywords
@@ -159,24 +160,56 @@ server <- function(input, output, session) {
         }
     )
     
+    output$axisControl <- renderUI({
+        data <- initial_data()
+        
+        cols <- data %>%
+            select(-keyword) %>%
+            colnames()
+        
+        
+        list(
+            cols %>% map(
+                ~ selectInput("xFeature",
+                              "Feature x Encoding",
+                              list(cols),
+                              selected = "avg.monthly.searches")
+            ),
+            cols %>% map(
+                ~ selectInput("yFeature",
+                              "Feature y Encoding",
+                              list(cols),
+                              selected = "competition")
+            ),
+            cols %>% map(
+                ~ selectInput(
+                    "colorFeature",
+                    "Feature color Encoding",
+                    list(cols),
+                    selected = "bid"
+                )
+            ),
+            downloadButton("exportData", "Export...")
+        )
+    })
+    
     output$sliders <- renderUI({
         data <- initial_data()
-        list(
-            downloadButton("exportData", "Export..."),
-            data %>%
-                select_if(is.numeric) %>%
-                colnames() %>%
-                map(~ .slider.input(
-                    data = data, field = .
-                ))
-        )
+        data %>%
+            select_if(is.numeric) %>%
+            colnames() %>%
+            map( ~ .slider.input(data = data, field = .))
     })
     
     
     output$keywordPlot <- renderPlot({
         filtered_data() %>%
-            mutate(bid.chance = 1 / bid) %>%
+            mutate(bid.chance = 1 / bid) %>% 
             semtools::keyword.plot(
+                x.feature.name = input$xFeature,
+                y.feature.name = input$yFeature,
+                color.feature.name = input$colorFeature,
+                #size.feature.name = input$sizeFeature,
                 .alpha = input$alpha,
                 .x.trans = input$xScale,
                 .y.trans = input$yScale,
