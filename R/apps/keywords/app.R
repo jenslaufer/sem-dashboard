@@ -73,6 +73,7 @@ ui <- fluidPage(
                 max = 1,
                 value = 1
             ),
+            uiOutput("axisControl"),
             uiOutput("sliders")
         ),
         mainPanel(tabsetPanel(
@@ -94,14 +95,16 @@ server <- function(input, output, session) {
     initial_data <- eventReactive(input$keywordFiles, {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.keywords() %>%
-            mutate(id = row_number()) %>%
+            mutate(id = row_number())  %>%
+            as_tibble() %>%
+            mutate(bid.chance = 1 / bid)
+        
+        
+        data$keywords <- data$keywords %>%
             mutate(included = if ("included" %in% colnames(.))
                 included
                 else
-                    F) %>%
-            as_tibble()
-        
-        
+                    F)
         data$keywords
     })
     
@@ -159,30 +162,74 @@ server <- function(input, output, session) {
         }
     )
     
+    output$axisControl <- renderUI({
+        data <- initial_data()
+        cols <- data %>%
+            select(-keyword) %>%
+            colnames()
+        cols <-  cols %>%
+            as.list() %>%
+            setNames(cols)
+        
+        print(cols)
+        
+        
+        list(
+            selectInput("xFeature",
+                        "Feature x Encoding",
+                        cols,
+                        selected = "avg.monthly.searches")
+            ,
+            selectInput("yFeature",
+                        "Feature y Encoding",
+                        cols,
+                        selected = "competition")
+            ,
+            selectInput(
+                "colorFeature",
+                "Feature color Encoding",
+                cols,
+                selected = "bid"
+            )
+            ,
+            selectInput("sizeFeature",
+                        "Feature size Encoding",
+                        cols,
+                        selected = "bid.chance")
+            ,
+            downloadButton("exportData", "Export...")
+        )
+    })
+    
     output$sliders <- renderUI({
         data <- initial_data()
-        list(
-            downloadButton("exportData", "Export..."),
-            data %>%
-                select_if(is.numeric) %>%
-                colnames() %>%
-                map(~ .slider.input(
-                    data = data, field = .
-                ))
-        )
+        data %>%
+            select_if(is.numeric) %>%
+            colnames() %>%
+            map( ~ .slider.input(data = data, field = .))
     })
     
     
     output$keywordPlot <- renderPlot({
-        filtered_data() %>%
-            mutate(bid.chance = 1 / bid) %>%
+        data <-  filtered_data()
+        plot <- data %>%
             semtools::keyword.plot(
+                x.feature.name = input$xFeature,
+                y.feature.name = input$yFeature,
+                color.feature.name = input$colorFeature,
+                size.feature.name = input$sizeFeature,
                 .alpha = input$alpha,
                 .x.trans = input$xScale,
                 .y.trans = input$yScale,
                 .labels = input$plotLabels
-            ) +
-            scale_colour_gradientn(colours = terrain.colors(10))
+            )
+        if (data %>%
+            select(input$colorFeature) %>%
+            map_chr(class) == "numeric") {
+            plot <- plot +
+                scale_colour_gradientn(colours = terrain.colors(10))
+        }
+        plot
     })
     
     
