@@ -206,12 +206,13 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map( ~ .slider.input(data = data, field = .))
     })
     
     
     output$keywordPlot <- renderPlot({
-        filtered_data() %>%
+        data <-  filtered_data()
+        plot <- data %>%
             semtools::keyword.plot(
                 x.feature.name = input$xFeature,
                 y.feature.name = input$yFeature,
@@ -221,8 +222,14 @@ server <- function(input, output, session) {
                 .x.trans = input$xScale,
                 .y.trans = input$yScale,
                 .labels = input$plotLabels
-            ) +
-            scale_colour_gradientn(colours = terrain.colors(10))
+            )
+        if (data %>%
+            select(input$colorFeature) %>%
+            map_chr(class) == "numeric") {
+            plot <- plot +
+                scale_colour_gradientn(colours = terrain.colors(10))
+        }
+        plot
     })
     
     
