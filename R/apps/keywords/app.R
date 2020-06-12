@@ -99,7 +99,6 @@ server <- function(input, output, session) {
             as_tibble() %>%
             mutate(bid.chance = 1 / bid)
         
-        print(data$keywords)
         
         data$keywords <- data$keywords %>%
             mutate(included = if ("included" %in% colnames(.))
@@ -165,41 +164,39 @@ server <- function(input, output, session) {
     
     output$axisControl <- renderUI({
         data <- initial_data()
-        
         cols <- data %>%
             select(-keyword) %>%
             colnames()
+        cols <-  cols %>%
+            as.list() %>%
+            setNames(cols)
+        
+        print(cols)
         
         
         list(
-            cols %>% map(
-                ~ selectInput("xFeature",
-                              "Feature x Encoding",
-                              list(cols),
-                              selected = "avg.monthly.searches")
-            ),
-            cols %>% map(
-                ~ selectInput("yFeature",
-                              "Feature y Encoding",
-                              list(cols),
-                              selected = "competition")
-            ),
-            cols %>% map(
-                ~ selectInput(
-                    "colorFeature",
-                    "Feature color Encoding",
-                    list(cols),
-                    selected = "bid"
-                )
-            ),
-            cols %>% map(
-                ~ selectInput(
-                    "sizeFeature",
-                    "Feature size Encoding",
-                    list(cols),
-                    selected = "bid.chance"
-                )
-            ),
+            selectInput("xFeature",
+                        "Feature x Encoding",
+                        cols,
+                        selected = "avg.monthly.searches")
+            ,
+            selectInput("yFeature",
+                        "Feature y Encoding",
+                        cols,
+                        selected = "competition")
+            ,
+            selectInput(
+                "colorFeature",
+                "Feature color Encoding",
+                cols,
+                selected = "bid"
+            )
+            ,
+            selectInput("sizeFeature",
+                        "Feature size Encoding",
+                        cols,
+                        selected = "bid.chance")
+            ,
             downloadButton("exportData", "Export...")
         )
     })
@@ -256,5 +253,5 @@ server <- function(input, output, session) {
                           )))
         }, escape = FALSE)
 }
-basicConfig(level = 20)
+basicConfig(level = 10)
 shinyApp(ui = ui, server = server)
