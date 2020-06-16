@@ -76,16 +76,12 @@ ui <- fluidPage(
             uiOutput("axisControl"),
             uiOutput("sliders")
         ),
-        mainPanel(tabsetPanel(
-            tabPanel(
-                "Analysis",
-                plotOutput("distributionPlot"),
-                plotOutput("keywordPlot") %>% withSpinner(type = 6),
-                textOutput(outputId = "myText"),
-                dataTableOutput("data")
-            ),
-            tabPanel("Tagging", dataTableOutput("taggingData"))
-        ))
+        mainPanel(
+            plotOutput("distributionPlot"),
+            plotOutput("keywordPlot") %>% withSpinner(type = 6),
+            textOutput(outputId = "myText"),
+            dataTableOutput("data")
+        )
     )
 )
 
@@ -109,10 +105,6 @@ server <- function(input, output, session) {
     })
     
     
-    shinyInput <- function(FUN, name, id, ...) {
-        as.character(FUN(paste0(name, id), ...))
-    }
-    
     filtered_data <- reactive({
         tryCatch({
             initial_data()
@@ -131,26 +123,6 @@ server <- function(input, output, session) {
             logerror(e)
             stop(safeError(e))
         })
-    })
-    
-    observeEvent(input$select_button, {
-        event <- input$select_button %>% str_split("_")
-        
-        command <- event %>% map(1)
-        selectedId <- event %>% map(2) %>% as.numeric()
-        
-        data$keywords <-
-            data$keywords %>% mutate(
-                included = case_when(
-                    id == data$keywords %>%
-                        filter(id == selectedId) %>% pull(id) &
-                        command == "Include" ~ T,
-                    id == data$keywords %>%
-                        filter(id == selectedId) %>% pull(id) &
-                        command == "Exclude" ~ F,
-                    T ~ included
-                )
-            )
     })
     
     output$exportData <- downloadHandler(
@@ -244,21 +216,6 @@ server <- function(input, output, session) {
             bind_cols(filtered_data())
         })
     
-    output$taggingData <-
-        renderDataTable({
-            bind_cols(filtered_data() %>%
-                          mutate(Actions = map2(
-                              id,
-                              included,
-                              ~ shinyInput(
-                                  actionButton,
-                                  if_else(.y, "Exclude_", "Include_"),
-                                  .x,
-                                  label = if_else(.y, "Exclude", "Include"),
-                                  onclick = paste0('Shiny.setInputValue( \"select_button\" , this.id)')
-                              )
-                          )))
-        }, escape = FALSE)
 }
 basicConfig(level = 10)
 shinyApp(ui = ui, server = server)
