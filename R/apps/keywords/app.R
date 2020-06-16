@@ -133,8 +133,29 @@ server <- function(input, output, session) {
         }
     )
     
+    observeEvent(input$data_rows_selected, {
+        filtered_data <- filtered_data()
+        data <- data$keywords
+        
+        selected_keyword <- filtered_data %>%
+            slice(input$data_rows_selected) %>%
+            pull(keyword)
+        
+        selected_keyword %>%  print()
+        
+        data$keywords <- data %>%
+            mutate(included = if_else(keyword == selected_keyword,!included,
+                                      included))
+        
+        print(
+            data$keywords %>% select(keyword, included) %>%
+                arrange(-included)
+        )
+        
+    })
+    
     output$axisControl <- renderUI({
-        data <- initial_data()
+        data <- filtered_data()
         cols <- data %>%
             select(-keyword) %>%
             colnames()
@@ -177,7 +198,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map( ~ .slider.input(data = data, field = .))
+            map(~ .slider.input(data = data, field = .))
     })
     
     
@@ -213,7 +234,7 @@ server <- function(input, output, session) {
     output$data <-
         renderDataTable({
             bind_cols(filtered_data())
-        })
+        }, selection = "single")
     
 }
 basicConfig(level = 10)
