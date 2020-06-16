@@ -79,7 +79,6 @@ ui <- fluidPage(
         mainPanel(
             plotOutput("distributionPlot"),
             plotOutput("keywordPlot") %>% withSpinner(type = 6),
-            textOutput(outputId = "myText"),
             dataTableOutput("data")
         )
     )
