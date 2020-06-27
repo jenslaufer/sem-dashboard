@@ -89,10 +89,11 @@ server <- function(input, output, session) {
     
     initial_data <- eventReactive(input$keywordFiles, {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
-            semtools::load.keywords() %>%
+            semtools::load.semrush.keywords() %>%
             mutate(id = row_number())  %>%
             as_tibble() %>%
-            mutate(bid.chance = 1 / bid)
+            mutate(cpc_chance = 1 / cpc) %>%
+            filter(!is.na(cpc_chance) & !is.infinite(cpc_chance))
         
         
         data$keywords <- data$keywords %>%
@@ -115,6 +116,8 @@ server <- function(input, output, session) {
                     "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
                 }) %>%
                 paste0(collapse = ",")
+            
+            logging::logdebug("data %>% filter({query})" %>% glue())
             
             eval(parse(text = "data %>% filter({query})" %>% glue()))
         },
@@ -144,13 +147,11 @@ server <- function(input, output, session) {
         selected_keyword %>%  print()
         
         data$keywords <- data %>%
-            mutate(included = if_else(keyword == selected_keyword,!included,
+            mutate(included = if_else(keyword == selected_keyword, !included,
                                       included))
         
-        print(
-            data$keywords %>% select(keyword, included) %>%
-                arrange(-included)
-        )
+        print(data$keywords %>% select(keyword, included) %>%
+                  arrange(-included))
         
     })
     
@@ -181,13 +182,13 @@ server <- function(input, output, session) {
                 "colorFeature",
                 "Feature color Encoding",
                 cols,
-                selected = "bid"
+                selected = "cpc"
             )
             ,
             selectInput("sizeFeature",
                         "Feature size Encoding",
                         cols,
-                        selected = "bid.chance")
+                        selected = "cpc_chance")
             ,
             downloadButton("exportData", "Export...")
         )
@@ -198,7 +199,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map( ~ .slider.input(data = data, field = .))
     })
     
     
