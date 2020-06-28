@@ -61,11 +61,6 @@ ui <- fluidPage(
                 list("Logarithmic" = "log10", "Linear" = "identity"),
                 selected = "Logarithmic"
             ),
-            radioButtons("plotLabels",
-                         "Plot Labels",
-                         c("Yes" = T,
-                           "No" = F),
-                         selected = F),
             sliderInput(
                 "alpha",
                 "Alpha",
@@ -78,7 +73,7 @@ ui <- fluidPage(
         ),
         mainPanel(
             plotOutput("distributionPlot"),
-            plotOutput("keywordPlot") %>% withSpinner(type = 6),
+            plotOutput("keywordPlot", brush = "distributionPlotBrush") %>% withSpinner(type = 6),
             dataTableOutput("data")
         )
     )
@@ -86,6 +81,8 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
     data <- reactiveValues(keywords = tibble())
+    
+    
     
     initial_data <- eventReactive(input$keywordFiles, {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
@@ -104,22 +101,40 @@ server <- function(input, output, session) {
         data$keywords
     })
     
+    brushed_data <- reactive({
+        initial_data()
+        brushedPoints(
+            data$keywords,
+            brush = input$distributionPlotBrush,
+            xvar = input$xFeature,
+            yvar = input$yFeature
+        )
+    })
     
     filtered_data <- reactive({
         tryCatch({
             initial_data()
             data <- data$keywords
-            query <- data %>%
-                select_if(is.numeric) %>%
-                colnames() %>%
-                map(function(feature) {
-                    "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
-                }) %>%
-                paste0(collapse = ",")
             
-            logging::logdebug("data %>% filter({query})" %>% glue())
+            result <- brushed_data()
             
-            eval(parse(text = "data %>% filter({query})" %>% glue()))
+            if (result
+                %>% nrow() == 0) {
+                query <- data %>%
+                    select_if(is.numeric) %>%
+                    colnames() %>%
+                    map(function(feature) {
+                        "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
+                    }) %>%
+                    paste0(collapse = ",")
+                
+                logging::logdebug("data %>% filter({query})" %>% glue())
+                
+                result <-
+                    eval(parse(text = "data %>% filter({query})" %>% glue()))
+            }
+            
+            result
         },
         error = function(e) {
             logerror(e)
@@ -147,7 +162,7 @@ server <- function(input, output, session) {
         selected_keyword %>%  print()
         
         data$keywords <- data %>%
-            mutate(included = if_else(keyword == selected_keyword, !included,
+            mutate(included = if_else(keyword == selected_keyword,!included,
                                       included))
         
         print(data$keywords %>% select(keyword, included) %>%
@@ -199,12 +214,17 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map( ~ .slider.input(data = data, field = .))
+            map(~ .slider.input(data = data, field = .))
     })
     
     
     output$keywordPlot <- renderPlot({
         data <-  filtered_data()
+        plotLabels <- F
+        if (data %>% nrow() < 100) {
+            plotLabels <- T
+        }
+        
         plot <- data %>%
             semtools::keyword.plot(
                 x.feature.name = input$xFeature,
@@ -214,7 +234,7 @@ server <- function(input, output, session) {
                 .alpha = input$alpha,
                 .x.trans = input$xScale,
                 .y.trans = input$yScale,
-                .labels = input$plotLabels
+                .labels = plotLabels
             )
         if (data %>%
             select(input$colorFeature) %>%
