@@ -73,7 +73,7 @@ ui <- fluidPage(
         ),
         mainPanel(
             plotOutput("distributionPlot"),
-            plotOutput("keywordPlot", brush = "distributionPlotBrush") %>% withSpinner(type = 6),
+            plotOutput("keywordPlot", brush = "keywordPlotBrush") %>% withSpinner(type = 6),
             dataTableOutput("data")
         )
     )
@@ -105,7 +105,7 @@ server <- function(input, output, session) {
         initial_data()
         brushedPoints(
             data$keywords,
-            brush = input$distributionPlotBrush,
+            brush = input$keywordPlotBrush,
             xvar = input$xFeature,
             yvar = input$yFeature
         )
@@ -114,24 +114,26 @@ server <- function(input, output, session) {
     filtered_data <- reactive({
         tryCatch({
             initial_data()
+            
             data <- data$keywords
             
             result <- brushed_data()
             
+            query <- data %>%
+                select_if(is.numeric) %>%
+                colnames() %>%
+                map(function(feature) {
+                    "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
+                }) %>%
+                paste0(collapse = ",")
+            filtered <-
+                eval(parse(text = "data %>% filter({query})" %>% glue()))
+            
             if (result
-                %>% nrow() == 0) {
-                query <- data %>%
-                    select_if(is.numeric) %>%
-                    colnames() %>%
-                    map(function(feature) {
-                        "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
-                    }) %>%
-                    paste0(collapse = ",")
-                
-                logging::logdebug("data %>% filter({query})" %>% glue())
-                
-                result <-
-                    eval(parse(text = "data %>% filter({query})" %>% glue()))
+                %>% nrow() == 0 |
+                (filtered %>% nrow() + 10 < data %>% nrow())) {
+                session$resetBrush("keywordPlotBrush")
+                result <- filtered
             }
             
             result
@@ -159,14 +161,9 @@ server <- function(input, output, session) {
             slice(input$data_rows_selected) %>%
             pull(keyword)
         
-        selected_keyword %>%  print()
-        
         data$keywords <- data %>%
             mutate(included = if_else(keyword == selected_keyword,!included,
                                       included))
-        
-        print(data$keywords %>% select(keyword, included) %>%
-                  arrange(-included))
         
     })
     
@@ -178,8 +175,6 @@ server <- function(input, output, session) {
         cols <-  cols %>%
             as.list() %>%
             setNames(cols)
-        
-        print(cols)
         
         
         list(
