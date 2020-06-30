@@ -24,13 +24,17 @@ library(broom)
         data %>%
         pull(field) %>%
         min(na.rm = TRUE)
-    sliderInput(
-        field,
-        title,
-        min = min,
-        max = max,
-        value = c(min, max)
-    )
+    # sliderInput(
+    #     field,
+    #     title,
+    #     min = min,
+    #     max = max,
+    #     value = c(min, max)
+    # )
+    
+    numericRangeInput(inputId = field,
+                      label = title,
+                      value = c(min, max))
 }
 
 
@@ -117,6 +121,8 @@ server <- function(input, output, session) {
             
             data <- data$keywords
             
+            input$xFeature %>% print()
+            
             result <- brushed_data()
             
             query <- data %>%
@@ -129,9 +135,9 @@ server <- function(input, output, session) {
             filtered <-
                 eval(parse(text = "data %>% filter({query})" %>% glue()))
             
-            if (result
-                %>% nrow() == 0 |
-                (filtered %>% nrow() + 10 < data %>% nrow())) {
+            if ((filtered %>% nrow() + 10 < data %>% nrow()) |
+                result
+                %>% nrow() == 0) {
                 session$resetBrush("keywordPlotBrush")
                 result <- filtered
             }
@@ -162,13 +168,13 @@ server <- function(input, output, session) {
             pull(keyword)
         
         data$keywords <- data %>%
-            mutate(included = if_else(keyword == selected_keyword,!included,
+            mutate(included = if_else(keyword == selected_keyword, !included,
                                       included))
         
     })
     
     output$axisControl <- renderUI({
-        data <- filtered_data()
+        data <- data$keywords
         cols <- data %>%
             select(-keyword) %>%
             colnames()
@@ -209,7 +215,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map( ~ .slider.input(data = data, field = .))
     })
     
     
