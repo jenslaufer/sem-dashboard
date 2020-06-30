@@ -24,13 +24,6 @@ library(broom)
         data %>%
         pull(field) %>%
         min(na.rm = TRUE)
-    # sliderInput(
-    #     field,
-    #     title,
-    #     min = min,
-    #     max = max,
-    #     value = c(min, max)
-    # )
     
     numericRangeInput(inputId = field,
                       label = title,
@@ -92,9 +85,7 @@ server <- function(input, output, session) {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.semrush.keywords() %>%
             mutate(id = row_number())  %>%
-            as_tibble() %>%
-            mutate(cpc_chance = 1 / cpc) %>%
-            filter(!is.na(cpc_chance) & !is.infinite(cpc_chance))
+            as_tibble() 
         
         
         data$keywords <- data$keywords %>%
@@ -120,8 +111,6 @@ server <- function(input, output, session) {
             initial_data()
             
             data <- data$keywords
-            
-            input$xFeature %>% print()
             
             result <- brushed_data()
             
@@ -168,7 +157,7 @@ server <- function(input, output, session) {
             pull(keyword)
         
         data$keywords <- data %>%
-            mutate(included = if_else(keyword == selected_keyword, !included,
+            mutate(included = if_else(keyword == selected_keyword,!included,
                                       included))
         
     })
@@ -204,7 +193,7 @@ server <- function(input, output, session) {
             selectInput("sizeFeature",
                         "Feature size Encoding",
                         cols,
-                        selected = "cpc_chance")
+                        selected = "cpc")
             ,
             downloadButton("exportData", "Export...")
         )
@@ -215,7 +204,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map( ~ .slider.input(data = data, field = .))
+            map(~ .slider.input(data = data, field = .))
     })
     
     
@@ -248,7 +237,7 @@ server <- function(input, output, session) {
     
     
     output$distributionPlot <- renderPlot({
-        filtered_data() %>%
+        initial_data() %>%
             semtools::distribution.quantitative.plots()
     })
     
