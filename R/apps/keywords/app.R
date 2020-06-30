@@ -193,7 +193,7 @@ server <- function(input, output, session) {
             selectInput("sizeFeature",
                         "Feature size Encoding",
                         cols,
-                        selected = "cpc")
+                        selected = "number_results")
             ,
             downloadButton("exportData", "Export...")
         )
