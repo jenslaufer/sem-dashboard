@@ -49,14 +49,42 @@ ui <- fluidPage(
             selectInput(
                 "xScale",
                 "Scaling X",
-                list("Logarithmic" = "log10", "Linear" = "identity"),
-                selected = "Logarithmic"
+                list(
+                    "Logarithmic" = "log10",
+                    "Linear" = "identity",
+                    "sqrt" = "sqrt"
+                ),
+                selected = "identity"
             ),
             selectInput(
                 "yScale",
                 "Scaling Y",
-                list("Logarithmic" = "log10", "Linear" = "identity"),
-                selected = "Logarithmic"
+                list(
+                    "Logarithmic" = "log10",
+                    "Linear" = "identity",
+                    "sqrt" = "sqrt"
+                ),
+                selected = "identity"
+            ),
+            selectInput(
+                "sizeScale",
+                "Scaling Size",
+                list(
+                    "Logarithmic" = "log10",
+                    "Linear" = "identity",
+                    "sqrt" = "sqrt"
+                ),
+                selected = "identity"
+            ),
+            selectInput(
+                "colorScale",
+                "Scaling Color",
+                list(
+                    "Logarithmic" = "log10",
+                    "Linear" = "identity",
+                    "sqrt" = "sqrt"
+                ),
+                selected = "identity"
             ),
             sliderInput(
                 "alpha",
@@ -85,7 +113,7 @@ server <- function(input, output, session) {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.semrush.keywords() %>%
             mutate(id = row_number())  %>%
-            as_tibble() 
+            as_tibble()
         
         
         data$keywords <- data$keywords %>%
@@ -211,11 +239,11 @@ server <- function(input, output, session) {
     output$keywordPlot <- renderPlot({
         data <-  filtered_data()
         plotLabels <- F
-        if (data %>% nrow() < 100) {
+        if (data %>% nrow() <= 75) {
             plotLabels <- T
         }
         
-        plot <- data %>%
+        data %>%
             semtools::keyword.plot(
                 x.feature.name = input$xFeature,
                 y.feature.name = input$yFeature,
@@ -224,15 +252,10 @@ server <- function(input, output, session) {
                 .alpha = input$alpha,
                 .x.trans = input$xScale,
                 .y.trans = input$yScale,
+                .size.trans = input$sizeScale,
+                .color.trans = input$colorScale,
                 .labels = plotLabels
             )
-        if (data %>%
-            select(input$colorFeature) %>%
-            map_chr(class) == "numeric") {
-            plot <- plot +
-                scale_colour_gradientn(colours = terrain.colors(10))
-        }
-        plot
     })
     
     
