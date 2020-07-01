@@ -112,9 +112,8 @@ server <- function(input, output, session) {
     initial_data <- eventReactive(input$keywordFiles, {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.semrush.keywords() %>%
-            mutate(id = row_number())  %>%
-            as_tibble()
-        
+            select(-Trend, -serp_features) %>%
+            mutate(id = row_number())
         
         data$keywords <- data$keywords %>%
             mutate(included = if ("included" %in% colnames(.))
@@ -185,7 +184,7 @@ server <- function(input, output, session) {
             pull(keyword)
         
         data$keywords <- data %>%
-            mutate(included = if_else(keyword == selected_keyword,!included,
+            mutate(included = if_else(keyword == selected_keyword, !included,
                                       included))
         
     })
@@ -232,7 +231,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map( ~ .slider.input(data = data, field = .))
     })
     
     
