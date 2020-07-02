@@ -1,0 +1,101 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r fig.height=10, fig.width=20}
+library(tidyverse)
+library(semtools)
+library(glue)
+library(scales)
+
+data <- semtools::load.semrush.keywords(
+  "/home/jens/Repos/online-calculator-affiliate-marketing/data/keywords/calculator-phrase_fullsearch-us.csv"
+) %>%
+  select(-Trend, -serp_features)
+
+configs1 <-  data %>%
+  select(-keyword) %>%
+  colnames() %>%
+  combn(m = 4, simplify = F) %>% 
+  transpose()
+```
+
+
+```{r}
+bla <- data %>% 
+  mutate_if(is.numeric, list(scale=~rescale(., c(0, 1))))  
+  
+
+
+bla %>% mutate(num=bla %>% select(ends_with("_scale")) %>% colnames() %>% length(), 
+               overall_rank=rowSums(select(., ends_with("_scale")))/num) %>% 
+  select(-ends_with("_scale"), -num)
+```
+```{r}
+data %>% select_if(is.numeric)
+```
+
+
+
+```{r}
+
+crossing %>% 
+  gather(-row, key="key", value="val") %>% 
+  group_by(val, row) %>% 
+  summarise(n=n()) %>% 
+  ungroup() %>% 
+  arrange(row) 
+```
+
+
+```{r}
+
+cols <- data %>%  select(-keyword) %>% colnames()
+crossing <- crossing(slot1=cols, slot2=cols, slot3=cols, slot4=cols) %>% 
+  mutate(row=row_number())
+
+unique_rows <- crossing %>% 
+  gather(-row, key="key", value="val") %>% 
+  group_by(val, row) %>% 
+  summarise(n=n()) %>% 
+  ungroup() %>% 
+  arrange(row) %>% 
+  group_by(row) %>% 
+  summarise(n=n()) %>% 
+  ungroup() %>% 
+  filter(n==4) %>% 
+  select(-n)
+
+configs <- crossing %>% 
+  right_join(unique_rows) %>% 
+  select(-row) %>% 
+  as.list() 
+```
+
+
+
+
+```{r fig.height=20, fig.width=20}
+
+configs %>% 
+  pmap(~ data %>% semtools::keyword.plot(
+    .alpha = 1,
+    .x.trans = "log10",
+    .size.trans = 'log10',
+    .y.trans = 'log10',
+    .color.trans = 'log10',
+    .labels = F,
+    x.feature.name = ..1,
+    y.feature.name =  ..2,
+    size.feature.name = ..3,
+    color.feature.name = ..4
+  )) 
+
+```
+ 

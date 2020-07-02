@@ -25,9 +25,16 @@ library(broom)
         pull(field) %>%
         min(na.rm = TRUE)
     
-    numericRangeInput(inputId = field,
-                      label = title,
-                      value = c(min, max))
+    
+    list(renderPlot({
+        data %>%
+            semtools::distribution.quantitative.plot(field)
+    }, width = 250, height = 150),
+    numericRangeInput(
+        inputId = field,
+        label = title,
+        value = c(min, max)
+    ))
 }
 
 
@@ -97,7 +104,6 @@ ui <- fluidPage(
             uiOutput("sliders")
         ),
         mainPanel(
-            plotOutput("distributionPlot"),
             plotOutput("keywordPlot", brush = "keywordPlotBrush") %>% withSpinner(type = 6),
             dataTableOutput("data")
         )
@@ -234,7 +240,6 @@ server <- function(input, output, session) {
             map( ~ .slider.input(data = data, field = .))
     })
     
-    
     output$keywordPlot <- renderPlot({
         data <-  filtered_data()
         plotLabels <- F
@@ -255,12 +260,6 @@ server <- function(input, output, session) {
                 .color.trans = input$colorScale,
                 .labels = plotLabels
             )
-    })
-    
-    
-    output$distributionPlot <- renderPlot({
-        initial_data() %>%
-            semtools::distribution.quantitative.plots()
     })
     
     
