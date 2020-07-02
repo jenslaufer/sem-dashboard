@@ -24,13 +24,17 @@ library(broom)
         data %>%
         pull(field) %>%
         min(na.rm = TRUE)
-    sliderInput(
-        field,
-        title,
-        min = min,
-        max = max,
+    
+    
+    list(renderPlot({
+        data %>%
+            semtools::distribution.quantitative.plot(field)
+    }, width = 250, height = 150),
+    numericRangeInput(
+        inputId = field,
+        label = title,
         value = c(min, max)
-    )
+    ))
 }
 
 
@@ -52,20 +56,43 @@ ui <- fluidPage(
             selectInput(
                 "xScale",
                 "Scaling X",
-                list("Logarithmic" = "log10", "Linear" = "identity"),
-                selected = "Logarithmic"
+                list(
+                    "Logarithmic" = "log10",
+                    "Linear" = "identity",
+                    "sqrt" = "sqrt"
+                ),
+                selected = "identity"
             ),
             selectInput(
                 "yScale",
                 "Scaling Y",
-                list("Logarithmic" = "log10", "Linear" = "identity"),
-                selected = "Logarithmic"
+                list(
+                    "Logarithmic" = "log10",
+                    "Linear" = "identity",
+                    "sqrt" = "sqrt"
+                ),
+                selected = "identity"
             ),
-            radioButtons("plotLabels",
-                         "Plot Labels",
-                         c("Yes" = T,
-                           "No" = F),
-                         selected = F),
+            selectInput(
+                "sizeScale",
+                "Scaling Size",
+                list(
+                    "Logarithmic" = "log10",
+                    "Linear" = "identity",
+                    "sqrt" = "sqrt"
+                ),
+                selected = "identity"
+            ),
+            selectInput(
+                "colorScale",
+                "Scaling Color",
+                list(
+                    "Logarithmic" = "log10",
+                    "Linear" = "identity",
+                    "sqrt" = "sqrt"
+                ),
+                selected = "identity"
+            ),
             sliderInput(
                 "alpha",
                 "Alpha",
@@ -76,29 +103,23 @@ ui <- fluidPage(
             uiOutput("axisControl"),
             uiOutput("sliders")
         ),
-        mainPanel(tabsetPanel(
-            tabPanel(
-                "Analysis",
-                plotOutput("distributionPlot"),
-                plotOutput("keywordPlot") %>% withSpinner(type = 6),
-                textOutput(outputId = "myText"),
-                dataTableOutput("data")
-            ),
-            tabPanel("Tagging", dataTableOutput("taggingData"))
-        ))
+        mainPanel(
+            plotOutput("keywordPlot", brush = "keywordPlotBrush") %>% withSpinner(type = 6),
+            dataTableOutput("data")
+        )
     )
 )
 
 server <- function(input, output, session) {
     data <- reactiveValues(keywords = tibble())
     
+    
+    
     initial_data <- eventReactive(input$keywordFiles, {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
-            semtools::load.keywords() %>%
-            mutate(id = row_number())  %>%
-            as_tibble() %>%
-            mutate(bid.chance = 1 / bid)
-        
+            semtools::load.semrush.keywords() %>%
+            select(-Trend, -serp_features) %>%
+            mutate(id = row_number())
         
         data$keywords <- data$keywords %>%
             mutate(included = if ("included" %in% colnames(.))
@@ -108,15 +129,24 @@ server <- function(input, output, session) {
         data$keywords
     })
     
-    
-    shinyInput <- function(FUN, name, id, ...) {
-        as.character(FUN(paste0(name, id), ...))
-    }
+    brushed_data <- reactive({
+        initial_data()
+        brushedPoints(
+            data$keywords,
+            brush = input$keywordPlotBrush,
+            xvar = input$xFeature,
+            yvar = input$yFeature
+        )
+    })
     
     filtered_data <- reactive({
         tryCatch({
             initial_data()
+            
             data <- data$keywords
+            
+            result <- brushed_data()
+            
             query <- data %>%
                 select_if(is.numeric) %>%
                 colnames() %>%
@@ -124,33 +154,22 @@ server <- function(input, output, session) {
                     "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
                 }) %>%
                 paste0(collapse = ",")
+            filtered <-
+                eval(parse(text = "data %>% filter({query})" %>% glue()))
             
-            eval(parse(text = "data %>% filter({query})" %>% glue()))
+            if ((filtered %>% nrow() + 10 < data %>% nrow()) |
+                result
+                %>% nrow() == 0) {
+                session$resetBrush("keywordPlotBrush")
+                result <- filtered
+            }
+            
+            result
         },
         error = function(e) {
             logerror(e)
             stop(safeError(e))
         })
-    })
-    
-    observeEvent(input$select_button, {
-        event <- input$select_button %>% str_split("_")
-        
-        command <- event %>% map(1)
-        selectedId <- event %>% map(2) %>% as.numeric()
-        
-        data$keywords <-
-            data$keywords %>% mutate(
-                included = case_when(
-                    id == data$keywords %>%
-                        filter(id == selectedId) %>% pull(id) &
-                        command == "Include" ~ T,
-                    id == data$keywords %>%
-                        filter(id == selectedId) %>% pull(id) &
-                        command == "Exclude" ~ F,
-                    T ~ included
-                )
-            )
     })
     
     output$exportData <- downloadHandler(
@@ -162,16 +181,28 @@ server <- function(input, output, session) {
         }
     )
     
+    observeEvent(input$data_rows_selected, {
+        filtered_data <- filtered_data()
+        data <- data$keywords
+        
+        selected_keyword <- filtered_data %>%
+            slice(input$data_rows_selected) %>%
+            pull(keyword)
+        
+        data$keywords <- data %>%
+            mutate(included = if_else(keyword == selected_keyword, !included,
+                                      included))
+        
+    })
+    
     output$axisControl <- renderUI({
-        data <- initial_data()
+        data <- data$keywords
         cols <- data %>%
             select(-keyword) %>%
             colnames()
         cols <-  cols %>%
             as.list() %>%
             setNames(cols)
-        
-        print(cols)
         
         
         list(
@@ -189,13 +220,13 @@ server <- function(input, output, session) {
                 "colorFeature",
                 "Feature color Encoding",
                 cols,
-                selected = "bid"
+                selected = "cpc"
             )
             ,
             selectInput("sizeFeature",
                         "Feature size Encoding",
                         cols,
-                        selected = "bid.chance")
+                        selected = "number_results")
             ,
             downloadButton("exportData", "Export...")
         )
@@ -209,10 +240,14 @@ server <- function(input, output, session) {
             map( ~ .slider.input(data = data, field = .))
     })
     
-    
     output$keywordPlot <- renderPlot({
         data <-  filtered_data()
-        plot <- data %>%
+        plotLabels <- F
+        if (data %>% nrow() <= 75) {
+            plotLabels <- T
+        }
+        
+        data %>%
             semtools::keyword.plot(
                 x.feature.name = input$xFeature,
                 y.feature.name = input$yFeature,
@@ -221,44 +256,18 @@ server <- function(input, output, session) {
                 .alpha = input$alpha,
                 .x.trans = input$xScale,
                 .y.trans = input$yScale,
-                .labels = input$plotLabels
+                .size.trans = input$sizeScale,
+                .color.trans = input$colorScale,
+                .labels = plotLabels
             )
-        if (data %>%
-            select(input$colorFeature) %>%
-            map_chr(class) == "numeric") {
-            plot <- plot +
-                scale_colour_gradientn(colours = terrain.colors(10))
-        }
-        plot
-    })
-    
-    
-    output$distributionPlot <- renderPlot({
-        filtered_data() %>%
-            semtools::distribution.quantitative.plots()
     })
     
     
     output$data <-
         renderDataTable({
             bind_cols(filtered_data())
-        })
+        }, selection = "single")
     
-    output$taggingData <-
-        renderDataTable({
-            bind_cols(filtered_data() %>%
-                          mutate(Actions = map2(
-                              id,
-                              included,
-                              ~ shinyInput(
-                                  actionButton,
-                                  if_else(.y, "Exclude_", "Include_"),
-                                  .x,
-                                  label = if_else(.y, "Exclude", "Include"),
-                                  onclick = paste0('Shiny.setInputValue( \"select_button\" , this.id)')
-                              )
-                          )))
-        }, escape = FALSE)
 }
 basicConfig(level = 10)
 shinyApp(ui = ui, server = server)
