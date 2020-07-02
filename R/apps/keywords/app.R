@@ -26,15 +26,17 @@ library(broom)
         min(na.rm = TRUE)
     
     
-    list(renderPlot({
-        data %>%
-            semtools::distribution.quantitative.plot(field)
-    }, width = 250, height = 150),
-    numericRangeInput(
-        inputId = field,
-        label = title,
-        value = c(min, max)
-    ))
+    list(
+        renderPlot({
+            data %>%
+                semtools::distribution.quantitative.plot(field)
+        }, width = 250, height = 150),
+        numericRangeInput(
+            inputId = field,
+            label = title,
+            value = c(min, max)
+        )
+    )
 }
 
 
@@ -118,7 +120,7 @@ server <- function(input, output, session) {
     initial_data <- eventReactive(input$keywordFiles, {
         data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.semrush.keywords() %>%
-            select(-Trend, -serp_features) %>%
+            select(-Trend,-serp_features) %>%
             mutate(id = row_number())
         
         data$keywords <- data$keywords %>%
@@ -190,7 +192,7 @@ server <- function(input, output, session) {
             pull(keyword)
         
         data$keywords <- data %>%
-            mutate(included = if_else(keyword == selected_keyword, !included,
+            mutate(included = if_else(keyword == selected_keyword,!included,
                                       included))
         
     })
@@ -204,29 +206,36 @@ server <- function(input, output, session) {
             as.list() %>%
             setNames(cols)
         
+        numeric_cols <-
+            data %>%
+            select_if(is.numeric) %>%
+            colnames()
+        
         
         list(
             selectInput("xFeature",
                         "Feature x Encoding",
                         cols,
-                        selected = "avg.monthly.searches")
+                        selected = numeric_cols[1])
             ,
             selectInput("yFeature",
                         "Feature y Encoding",
                         cols,
-                        selected = "competition")
+                        selected = numeric_cols[2])
             ,
             selectInput(
                 "colorFeature",
                 "Feature color Encoding",
                 cols,
-                selected = "cpc"
+                selected = numeric_cols[3]
             )
             ,
-            selectInput("sizeFeature",
-                        "Feature size Encoding",
-                        cols,
-                        selected = "number_results")
+            selectInput(
+                "sizeFeature",
+                "Feature size Encoding",
+                cols,
+                selected = numeric_cols[4]
+            )
             ,
             downloadButton("exportData", "Export...")
         )
@@ -237,7 +246,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map( ~ .slider.input(data = data, field = .))
+            map(~ .slider.input(data = data, field = .))
     })
     
     output$keywordPlot <- renderPlot({
