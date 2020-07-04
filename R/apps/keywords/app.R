@@ -106,7 +106,8 @@ ui <- fluidPage(
             uiOutput("sliders")
         ),
         mainPanel(
-            plotOutput("keywordPlot", brush = "keywordPlotBrush") %>% withSpinner(type = 6),
+            plotOutput("keywordFilterPlot", brush = "keywordPlotBrush") %>% withSpinner(type = 6),
+            plotOutput("keywordPlot", click = "keywordPlotClick"),
             dataTableOutput("data")
         )
     )
@@ -132,7 +133,6 @@ server <- function(input, output, session) {
     })
     
     brushed_data <- reactive({
-        initial_data()
         brushedPoints(
             data$keywords,
             brush = input$keywordPlotBrush,
@@ -147,7 +147,6 @@ server <- function(input, output, session) {
             
             data <- data$keywords
             
-            result <- brushed_data()
             
             query <- data %>%
                 select_if(is.numeric) %>%
@@ -156,17 +155,8 @@ server <- function(input, output, session) {
                     "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
                 }) %>%
                 paste0(collapse = ",")
-            filtered <-
-                eval(parse(text = "data %>% filter({query})" %>% glue()))
+            eval(parse(text = "data %>% filter({query})" %>% glue()))
             
-            if ((filtered %>% nrow() + 10 < data %>% nrow()) |
-                result
-                %>% nrow() == 0) {
-                session$resetBrush("keywordPlotBrush")
-                result <- filtered
-            }
-            
-            result
         },
         error = function(e) {
             logerror(e)
@@ -194,6 +184,27 @@ server <- function(input, output, session) {
         data$keywords <- data %>%
             mutate(included = if_else(keyword == selected_keyword,!included,
                                       included))
+        
+    })
+    
+    observeEvent(input$ok, {
+        
+    })
+    
+    observeEvent(input$keywordPlotClick, {
+        dataPoints <- data$keywords %>%
+            nearPoints(input$keywordPlotClick, addDist = TRUE)
+        
+        if (dataPoints %>% nrow() > 0) {
+            showModal(
+                modalDialog(
+                    title = "Somewhat important message",
+                    "This is a somewhat important message.",
+                    easyClose = TRUE,
+                    footer = tagList(actionButton("ok", "OK"))
+                )
+            )
+        }
         
     })
     
@@ -250,6 +261,29 @@ server <- function(input, output, session) {
     })
     
     output$keywordPlot <- renderPlot({
+        data <-  brushed_data()
+        plotLabels <- F
+        if (data %>% nrow() <= 75) {
+            plotLabels <- T
+        }
+        
+        data %>%
+            semtools::keyword.plot(
+                x.feature.name = input$xFeature,
+                y.feature.name = input$yFeature,
+                color.feature.name = input$colorFeature,
+                size.feature.name = input$sizeFeature,
+                .alpha = input$alpha,
+                .x.trans = input$xScale,
+                .y.trans = input$yScale,
+                .size.trans = input$sizeScale,
+                .color.trans = input$colorScale,
+                .labels = plotLabels
+            )
+    })
+    
+    
+    output$keywordFilterPlot <- renderPlot({
         data <-  filtered_data()
         plotLabels <- F
         if (data %>% nrow() <= 75) {
