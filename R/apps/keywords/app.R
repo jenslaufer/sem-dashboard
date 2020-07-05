@@ -39,6 +39,16 @@ library(broom)
     )
 }
 
+.get_data_point <- function(data, field) {
+    dataPoints <- data %>%
+        nearPoints(field, addDist = F)
+    if (dataPoints %>% nrow() > 0) {
+        dataPoints %>% head(1)
+    } else{
+        NULL
+    }
+}
+
 
 ui <- fluidPage(
     theme = shinytheme("cosmo"),
@@ -133,6 +143,7 @@ server <- function(input, output, session) {
     })
     
     brushed_data <- reactive({
+        initial_data()
         brushedPoints(
             data$keywords,
             brush = input$keywordPlotBrush,
@@ -188,22 +199,26 @@ server <- function(input, output, session) {
     })
     
     observeEvent(input$ok, {
+        clicked_data_point <-
+            .get_data_point(data$keywords, input$keywordPlotClick)
         
     })
     
     observeEvent(input$keywordPlotClick, {
-        dataPoints <- data$keywords %>%
-            nearPoints(input$keywordPlotClick, addDist = TRUE)
+        clicked_data_point <-
+            .get_data_point(data$keywords, input$keywordPlotClick)
         
-        if (dataPoints %>% nrow() > 0) {
-            showModal(
-                modalDialog(
-                    title = "Somewhat important message",
-                    "This is a somewhat important message.",
-                    easyClose = TRUE,
-                    footer = tagList(actionButton("ok", "OK"))
-                )
-            )
+        if (!is.null(clicked_data_point)) {
+            details <-
+                clicked_data_point %>% colnames() %>%
+                map(~ paste(.x, ": ", clicked_data_point %>% pull(.x), "<br>")) %>%
+                as.character()
+            showModal(modalDialog(
+                title = "",
+                HTML(details),
+                easyClose = TRUE,
+                footer = tagList(actionButton("ok", "OK"))
+            ))
         }
         
     })
