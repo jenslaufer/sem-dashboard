@@ -199,8 +199,15 @@ server <- function(input, output, session) {
     })
     
     observeEvent(input$ok, {
-        clicked_data_point <-
-            .get_data_point(data$keywords, input$keywordPlotClick)
+        clicked_id <-
+            .get_data_point(data$keywords, input$keywordPlotClick) %>% pull(id)
+        
+        data$keywords <-
+            data$keywords %>%
+            mutate(included = if_else(id == clicked_id, !included, included))
+        
+        
+        
         
     })
     
@@ -213,11 +220,16 @@ server <- function(input, output, session) {
                 clicked_data_point %>% colnames() %>%
                 map(~ paste(.x, ": ", clicked_data_point %>% pull(.x), "<br>")) %>%
                 as.character()
+            button_label <- "Include"
+            if(clicked_data_point %>% pull(included) == T){
+                button_label <- "Exclude"
+            }
+            
             showModal(modalDialog(
                 title = "",
                 HTML(details),
                 easyClose = TRUE,
-                footer = tagList(actionButton("ok", "OK"))
+                footer = tagList(actionButton("ok", button_label))
             ))
         }
         
