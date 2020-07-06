@@ -14,7 +14,7 @@ library(broom)
 
 
 
-.slider.input <- function(data,
+.slider_input <- function(data,
                           field,
                           title = field) {
     max <- data %>%
@@ -38,6 +38,24 @@ library(broom)
         )
     )
 }
+
+.slider_input_update <-
+    function(data, field, title = field, session) {
+        max <- data %>%
+            pull(field) %>%
+            max(na.rm = TRUE)
+        min <-
+            data %>%
+            pull(field) %>%
+            min(na.rm = TRUE)
+        
+        updateNumericRangeInput(
+            inputId = field,
+            label = title,
+            session = session,
+            value = c(min, max)
+        )
+    }
 
 .get_data_point <- function(data, field) {
     dataPoints <- data %>%
@@ -248,6 +266,20 @@ server <- function(input, output, session) {
         
     })
     
+    observeEvent(input$filterClear, {
+        data <- data$rows
+        data %>%
+            select_if(is.numeric) %>%
+            select(-id) %>%
+            colnames()  %>%
+            map(~ .slider_input_update(
+                data = data,
+                field = .,
+                session = session
+            ))
+        
+    })
+    
     output$axisControl <- renderUI({
         data <- data$rows
         cols <- data %>%
@@ -286,9 +318,9 @@ server <- function(input, output, session) {
                 "Feature size Encoding",
                 cols,
                 selected = numeric_cols[4]
-            )
-            ,
-            downloadButton("exportData", "Export...")
+            ),
+            downloadButton("exportData", "Export..."),
+            actionButton("filterClear", "Clear filters")
         )
     })
     
@@ -297,7 +329,7 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map(~ .slider_input(data = data, field = .))
     })
     
     output$keywordPlot <- renderPlot({
