@@ -14,7 +14,7 @@ library(broom)
 
 
 
-.slider.input <- function(data,
+.slider_input <- function(data,
                           field,
                           title = field) {
     max <- data %>%
@@ -36,6 +36,52 @@ library(broom)
             label = title,
             value = c(min, max)
         )
+    )
+}
+
+.slider_input_update <-
+    function(data, field, title = field, session) {
+        max <- data %>%
+            pull(field) %>%
+            max(na.rm = TRUE)
+        min <-
+            data %>%
+            pull(field) %>%
+            min(na.rm = TRUE)
+        
+        updateNumericRangeInput(
+            inputId = field,
+            label = title,
+            session = session,
+            value = c(min, max)
+        )
+    }
+
+.get_data_point <- function(data, field) {
+    dataPoints <- data %>%
+        nearPoints(field, addDist = F)
+    if (dataPoints %>% nrow() > 0) {
+        dataPoints %>% head(1)
+    } else{
+        NULL
+    }
+}
+.get_modal <- function(clicked_data_point) {
+    details <-
+        clicked_data_point %>% colnames() %>%
+        map(~ paste(.x, ": ", clicked_data_point %>% pull(.x), "<br>")) %>%
+        as.character()
+    
+    button_label <- "Include"
+    if (clicked_data_point %>% pull(included) == T) {
+        button_label <- "Exclude"
+    }
+    
+    modalDialog(
+        title = "",
+        HTML(details),
+        easyClose = TRUE,
+        footer = tagList(actionButton("ok", button_label))
     )
 }
 
@@ -106,35 +152,34 @@ ui <- fluidPage(
             uiOutput("sliders")
         ),
         mainPanel(
-            plotOutput("keywordPlot", brush = "keywordPlotBrush") %>% withSpinner(type = 6),
+            plotOutput("keywordFilterPlot", brush = "keywordPlotBrush", click = "keywordFilterPlotClick") %>% withSpinner(type = 6),
+            plotOutput("keywordPlot", click = "keywordPlotClick"),
             dataTableOutput("data")
         )
     )
 )
 
 server <- function(input, output, session) {
-    data <- reactiveValues(keywords = tibble())
-    
-    
+    data <- reactiveValues(rows = tibble())
     
     initial_data <- eventReactive(input$keywordFiles, {
-        data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
+        data$rows <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.semrush.keywords() %>%
             select(-Trend,-serp_features) %>%
             mutate(id = row_number())
         
-        data$keywords <- data$keywords %>%
+        data$rows <- data$rows %>%
             mutate(included = if ("included" %in% colnames(.))
                 included
                 else
                     F)
-        data$keywords
+        data$rows
     })
     
     brushed_data <- reactive({
         initial_data()
         brushedPoints(
-            data$keywords,
+            data$rows,
             brush = input$keywordPlotBrush,
             xvar = input$xFeature,
             yvar = input$yFeature
@@ -145,9 +190,8 @@ server <- function(input, output, session) {
         tryCatch({
             initial_data()
             
-            data <- data$keywords
+            data <- data$rows
             
-            result <- brushed_data()
             
             query <- data %>%
                 select_if(is.numeric) %>%
@@ -156,17 +200,8 @@ server <- function(input, output, session) {
                     "between({feature}, input${feature}[1], input${feature}[2])" %>% glue()
                 }) %>%
                 paste0(collapse = ",")
-            filtered <-
-                eval(parse(text = "data %>% filter({query})" %>% glue()))
+            eval(parse(text = "data %>% filter({query})" %>% glue()))
             
-            if ((filtered %>% nrow() + 10 < data %>% nrow()) |
-                result
-                %>% nrow() == 0) {
-                session$resetBrush("keywordPlotBrush")
-                result <- filtered
-            }
-            
-            result
         },
         error = function(e) {
             logerror(e)
@@ -179,26 +214,74 @@ server <- function(input, output, session) {
             paste("labeled-", Sys.Date(), ".csv", sep = "")
         },
         content = function(file) {
-            data$keywords %>% write_csv(file)
+            data$rows %>% write_csv(file)
         }
     )
     
     observeEvent(input$data_rows_selected, {
         filtered_data <- filtered_data()
-        data <- data$keywords
         
-        selected_keyword <- filtered_data %>%
-            slice(input$data_rows_selected) %>%
-            pull(keyword)
+        selected <- filtered_data %>%
+            slice(input$data_rows_selected)
+        showModal(.get_modal(selected))
+    })
+    
+    observeEvent(input$ok, {
+        if (!is.null(input$keywordPlotClick)) {
+            clicked_id <-
+                .get_data_point(data$rows, input$keywordPlotClick) %>% pull(id)
+        } else if (!is.null(input$keywordFilterPlotClick)) {
+            clicked_id <-
+                .get_data_point(data$rows, input$keywordFilterPlotClick) %>% pull(id)
+        } else if (!is.null(input$data_rows_selected)) {
+            filtered_data <- filtered_data()
+            clicked_id <- filtered_data %>%
+                slice(input$data_rows_selected) %>% pull(id)
+        }
         
-        data$keywords <- data %>%
-            mutate(included = if_else(keyword == selected_keyword,!included,
-                                      included))
+        
+        data$rows <-
+            data$rows %>%
+            mutate(included = if_else(id == clicked_id, !included, included))
+        removeModal()
+    })
+    
+    observeEvent(input$keywordPlotClick, {
+        clicked_data_point <-
+            .get_data_point(data$rows, input$keywordPlotClick)
+        
+        if (!is.null(clicked_data_point)) {
+            showModal(.get_modal(clicked_data_point))
+        }
+        
+    })
+    
+    observeEvent(input$keywordFilterPlotClick, {
+        clicked_data_point <-
+            .get_data_point(data$rows, input$keywordFilterPlotClick)
+        
+        if (!is.null(clicked_data_point)) {
+            showModal(.get_modal(clicked_data_point))
+        }
+        
+    })
+    
+    observeEvent(input$filterClear, {
+        data <- data$rows
+        data %>%
+            select_if(is.numeric) %>%
+            select(-id) %>%
+            colnames()  %>%
+            map(~ .slider_input_update(
+                data = data,
+                field = .,
+                session = session
+            ))
         
     })
     
     output$axisControl <- renderUI({
-        data <- data$keywords
+        data <- data$rows
         cols <- data %>%
             select(-keyword) %>%
             colnames()
@@ -235,9 +318,9 @@ server <- function(input, output, session) {
                 "Feature size Encoding",
                 cols,
                 selected = numeric_cols[4]
-            )
-            ,
-            downloadButton("exportData", "Export...")
+            ),
+            downloadButton("exportData", "Export..."),
+            actionButton("filterClear", "Clear filters")
         )
     })
     
@@ -246,10 +329,33 @@ server <- function(input, output, session) {
         data %>%
             select_if(is.numeric) %>%
             colnames() %>%
-            map(~ .slider.input(data = data, field = .))
+            map(~ .slider_input(data = data, field = .))
     })
     
     output$keywordPlot <- renderPlot({
+        data <-  brushed_data()
+        plotLabels <- F
+        if (data %>% nrow() <= 75) {
+            plotLabels <- T
+        }
+        
+        data %>%
+            semtools::keyword.plot(
+                x.feature.name = input$xFeature,
+                y.feature.name = input$yFeature,
+                color.feature.name = input$colorFeature,
+                size.feature.name = input$sizeFeature,
+                .alpha = input$alpha,
+                .x.trans = input$xScale,
+                .y.trans = input$yScale,
+                .size.trans = input$sizeScale,
+                .color.trans = input$colorScale,
+                .labels = plotLabels
+            )
+    })
+    
+    
+    output$keywordFilterPlot <- renderPlot({
         data <-  filtered_data()
         plotLabels <- F
         if (data %>% nrow() <= 75) {
