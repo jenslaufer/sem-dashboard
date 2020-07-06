@@ -48,6 +48,24 @@ library(broom)
         NULL
     }
 }
+.get_modal <- function(clicked_data_point) {
+    details <-
+        clicked_data_point %>% colnames() %>%
+        map(~ paste(.x, ": ", clicked_data_point %>% pull(.x), "<br>")) %>%
+        as.character()
+    
+    button_label <- "Include"
+    if (clicked_data_point %>% pull(included) == T) {
+        button_label <- "Exclude"
+    }
+    
+    modalDialog(
+        title = "",
+        HTML(details),
+        easyClose = TRUE,
+        footer = tagList(actionButton("ok", button_label))
+    )
+}
 
 
 ui <- fluidPage(
@@ -116,7 +134,7 @@ ui <- fluidPage(
             uiOutput("sliders")
         ),
         mainPanel(
-            plotOutput("keywordFilterPlot", brush = "keywordPlotBrush") %>% withSpinner(type = 6),
+            plotOutput("keywordFilterPlot", brush = "keywordPlotBrush", click = "keywordFilterPlotClick") %>% withSpinner(type = 6),
             plotOutput("keywordPlot", click = "keywordPlotClick"),
             dataTableOutput("data")
         )
@@ -124,28 +142,26 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-    data <- reactiveValues(keywords = tibble())
-    
-    
+    data <- reactiveValues(rows = tibble())
     
     initial_data <- eventReactive(input$keywordFiles, {
-        data$keywords <- (input$keywordFiles %>% pull(datapath)) %>%
+        data$rows <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.semrush.keywords() %>%
             select(-Trend,-serp_features) %>%
             mutate(id = row_number())
         
-        data$keywords <- data$keywords %>%
+        data$rows <- data$rows %>%
             mutate(included = if ("included" %in% colnames(.))
                 included
                 else
                     F)
-        data$keywords
+        data$rows
     })
     
     brushed_data <- reactive({
         initial_data()
         brushedPoints(
-            data$keywords,
+            data$rows,
             brush = input$keywordPlotBrush,
             xvar = input$xFeature,
             yvar = input$yFeature
@@ -156,7 +172,7 @@ server <- function(input, output, session) {
         tryCatch({
             initial_data()
             
-            data <- data$keywords
+            data <- data$rows
             
             
             query <- data %>%
@@ -180,63 +196,60 @@ server <- function(input, output, session) {
             paste("labeled-", Sys.Date(), ".csv", sep = "")
         },
         content = function(file) {
-            data$keywords %>% write_csv(file)
+            data$rows %>% write_csv(file)
         }
     )
     
     observeEvent(input$data_rows_selected, {
         filtered_data <- filtered_data()
-        data <- data$keywords
         
-        selected_keyword <- filtered_data %>%
-            slice(input$data_rows_selected) %>%
-            pull(keyword)
-        
-        data$keywords <- data %>%
-            mutate(included = if_else(keyword == selected_keyword,!included,
-                                      included))
-        
+        selected <- filtered_data %>%
+            slice(input$data_rows_selected)
+        showModal(.get_modal(selected))
     })
     
     observeEvent(input$ok, {
-        clicked_id <-
-            .get_data_point(data$keywords, input$keywordPlotClick) %>% pull(id)
+        if (!is.null(input$keywordPlotClick)) {
+            clicked_id <-
+                .get_data_point(data$rows, input$keywordPlotClick) %>% pull(id)
+        } else if (!is.null(input$keywordFilterPlotClick)) {
+            clicked_id <-
+                .get_data_point(data$rows, input$keywordFilterPlotClick) %>% pull(id)
+        } else if (!is.null(input$data_rows_selected)) {
+            filtered_data <- filtered_data()
+            clicked_id <- filtered_data %>%
+                slice(input$data_rows_selected) %>% pull(id)
+        }
         
-        data$keywords <-
-            data$keywords %>%
+        
+        data$rows <-
+            data$rows %>%
             mutate(included = if_else(id == clicked_id, !included, included))
-        
-        
-        
-        
+        removeModal()
     })
     
     observeEvent(input$keywordPlotClick, {
         clicked_data_point <-
-            .get_data_point(data$keywords, input$keywordPlotClick)
+            .get_data_point(data$rows, input$keywordPlotClick)
         
         if (!is.null(clicked_data_point)) {
-            details <-
-                clicked_data_point %>% colnames() %>%
-                map(~ paste(.x, ": ", clicked_data_point %>% pull(.x), "<br>")) %>%
-                as.character()
-            button_label <- "Include"
-            if(clicked_data_point %>% pull(included) == T){
-                button_label <- "Exclude"
-            }
-            
-            showModal(modalDialog(
-                title = "",
-                HTML(details),
-                easyClose = TRUE,
-                footer = tagList(actionButton("ok", button_label))
-            ))
+            showModal(.get_modal(clicked_data_point))
+        }
+        
+    })
+    
+    observeEvent(input$keywordFilterPlotClick, {
+        clicked_data_point <-
+            .get_data_point(data$rows, input$keywordFilterPlotClick)
+        
+        if (!is.null(clicked_data_point)) {
+            showModal(.get_modal(clicked_data_point))
         }
         
     })
     
     output$axisControl <- renderUI({
-        data <- data$keywords
+        data <- data$rows
         cols <- data %>%
             select(-keyword) %>%
             colnames()
