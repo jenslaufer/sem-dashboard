@@ -165,7 +165,6 @@ server <- function(input, output, session) {
     initial_data <- eventReactive(input$keywordFiles, {
         data$rows <- (input$keywordFiles %>% pull(datapath)) %>%
             semtools::load.semrush.keywords() %>%
-            select(-Trend,-serp_features) %>%
             mutate(id = row_number())
         
         data$rows <- data$rows %>%
