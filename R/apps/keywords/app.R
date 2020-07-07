@@ -233,7 +233,7 @@ server <- function(input, output, session) {
             clicked_id <-
                 .get_data_point(data$rows, input$keywordFilterPlotClick) %>% pull(id)
         } else if (!is.null(input$data_rows_selected)) {
-            filtered_data <- data$rows
+            filtered_data <- filtered_data()
             clicked_id <- filtered_data %>%
                 slice(input$data_rows_selected) %>% pull(id)
         }
@@ -378,9 +378,7 @@ server <- function(input, output, session) {
     
     
     output$data <-
-        renderDataTable({
-            bind_cols(filtered_data())
-        }, selection = "single")
+        renderDataTable(filtered_data(), selection = "single")
     
 }
 basicConfig(level = 10)
