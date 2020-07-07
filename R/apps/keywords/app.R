@@ -234,7 +234,7 @@ server <- function(input, output, session) {
             clicked_id <-
                 .get_data_point(data$rows, input$keywordFilterPlotClick) %>% pull(id)
         } else if (!is.null(input$data_rows_selected)) {
-            filtered_data <- filtered_data()
+            filtered_data <- data$rows
             clicked_id <- filtered_data %>%
                 slice(input$data_rows_selected) %>% pull(id)
         }
@@ -281,7 +281,7 @@ server <- function(input, output, session) {
     })
     
     output$axisControl <- renderUI({
-        data <- data$rows
+        data <- initial_data()
         cols <- data %>%
             select(-keyword) %>%
             colnames()
